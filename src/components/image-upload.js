@@ -34,7 +34,7 @@ export default function ImageUpload() {
             });
             if (response.ok) {
                 const data = await response.json();
-                console.log(data)
+                console.log(data);
                 setMessage(`Detection Result: ${data.detections[0].class || "No car detected"}`);
             } else {
                 setMessage(`Error: ${response.statusText}`);
@@ -60,6 +60,18 @@ export default function ImageUpload() {
                     {loading ? "Uploading..." : "Upload Image"}
                 </button>
             </form>
+
+            {image && (
+                <div style={{ marginTop: "20px",alignItems: "center", display:"flex",flexDirection: "column" }}>
+                    <h3>Uploaded Image:</h3>
+                    <img 
+                        src={URL.createObjectURL(image)} 
+                        alt="Uploaded Image" 
+                        style={{ width: "300px", height: "auto", marginTop: "10px" }} 
+                    />
+                </div>
+            )}
+
             {message && <p>{message}</p>}
         </div>
     );
