@@ -11,6 +11,7 @@ export default function ImageUpload() {
     const [loading, setLoading] = useState(false);
     const canvasRef = useRef(null);
     const [imgDimensions, setImgDimensions] = useState({ height: 300 });
+    const [hoveredBoxIndex, setHoveredBoxIndex] = useState(-1);  // Track hovered box index
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -60,18 +61,12 @@ export default function ImageUpload() {
         const img = new Image();
         img.src = URL.createObjectURL(image);
 
-        img.onload = () => {
-            const aspectRatio = img.width / img.height;
-
-            // Adjust the canvas width based on the aspect ratio
-            canvas.width = imgDimensions.height * aspectRatio;
-            canvas.height = imgDimensions.height;
-
+        const drawDetections = (hoveredBoxIndex = -1) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            detections.forEach(({ class: label, box }) => {
+            detections.forEach(({ class: label, box }, index) => {
                 if (!box || typeof box !== "object") return;
-
                 const { x_min, y_min, x_max, y_max } = box;
 
                 // Scale the bounding box to fit the image size
@@ -80,15 +75,50 @@ export default function ImageUpload() {
                 const scaledXMax = (x_max * canvas.width) / img.width;
                 const scaledYMax = (y_max * canvas.height) / img.height;
 
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 3;
+                ctx.strokeStyle = index === hoveredBoxIndex ? "lime" : "red"; // Highlight hovered box
+                ctx.lineWidth = index === hoveredBoxIndex ? 4 : 2;
                 ctx.strokeRect(scaledXMin, scaledYMin, scaledXMax - scaledXMin, scaledYMax - scaledYMin);
 
-                ctx.fillStyle = "red";
-                ctx.fillText(label, scaledXMin, scaledYMin - 5);
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.font = "16px Arial";
+                ctx.fillText(label, scaledXMin + 4, scaledYMin - 8);
             });
         };
-    }, [image, detections, imgDimensions]); // Rerun when image, detections, or imgDimensions change
+
+        img.onload = () => {
+            const aspectRatio = img.width / img.height;
+
+            // Adjust the canvas width based on the aspect ratio
+            canvas.width = imgDimensions.height * aspectRatio;
+            canvas.height = imgDimensions.height;
+
+            drawDetections();
+
+            const handleMouseMove = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                let hoveredIndex = -1;
+                detections.forEach(({ box }, index) => {
+                    if (!box) return;
+                    const { x_min, y_min, x_max, y_max } = box;
+                    if (x >= x_min && x <= x_max && y >= y_min && y <= y_max) {
+                        hoveredIndex = index;
+                    }
+                });
+
+                setHoveredBoxIndex(hoveredIndex); // Update the hovered box index
+                drawDetections(hoveredIndex);
+            };
+
+            canvas.addEventListener("mousemove", handleMouseMove);
+
+            return () => {
+                canvas.removeEventListener("mousemove", handleMouseMove);
+            };
+        };
+    }, [image, detections, imgDimensions, hoveredBoxIndex]);
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
