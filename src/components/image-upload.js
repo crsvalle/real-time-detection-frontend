@@ -52,31 +52,60 @@ export default function ImageUpload() {
 
     useEffect(() => {
         if (!image || detections.length === 0) return;
+    
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         const img = new Image();
         img.src = URL.createObjectURL(image);
-
+    
+        const drawDetections = (hoveredBoxIndex = -1) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+    
+            detections.forEach(({ class: label, box }, index) => {
+                if (!box || typeof box !== "object") return;
+                const { x_min, y_min, x_max, y_max } = box;
+    
+                ctx.strokeStyle = index === hoveredBoxIndex ? "lime" : "red";
+                ctx.lineWidth = index === hoveredBoxIndex ? 4 : 2;
+                ctx.strokeRect(x_min, y_min, x_max - x_min, y_max - y_min);
+    
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.font = "16px Arial";
+                ctx.fillText(label, x_min + 4, y_min - 8);
+            });
+        };
+    
         img.onload = () => {
             canvas.width = img.width;
             canvas.height = img.height;
-            ctx.drawImage(img, 0, 0, img.width, img.height);
-
-            detections.forEach(({ class: label, box }) => {
-                if (!box || typeof box !== "object") return; 
-                
-                const { x_min, y_min, x_max, y_max } = box; 
-            
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(x_min, y_min, x_max - x_min, y_max - y_min);
-            
-                ctx.fillStyle = "red";
-                ctx.fillText(label, x_min, y_min - 5);
-            });
-            
+            drawDetections();
+    
+            const handleMouseMove = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+    
+                let hoveredIndex = -1;
+                detections.forEach(({ box }, index) => {
+                    if (!box) return;
+                    const { x_min, y_min, x_max, y_max } = box;
+                    if (x >= x_min && x <= x_max && y >= y_min && y <= y_max) {
+                        hoveredIndex = index;
+                    }
+                });
+    
+                drawDetections(hoveredIndex);
+            };
+    
+            canvas.addEventListener("mousemove", handleMouseMove);
+    
+            return () => {
+                canvas.removeEventListener("mousemove", handleMouseMove);
+            };
         };
     }, [image, detections]);
+    
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
