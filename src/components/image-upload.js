@@ -5,7 +5,8 @@ import { useState, useRef, useEffect } from "react";
 const API = process.env.NEXT_PUBLIC_BACKEND_API;
 
 export default function ImageUpload() {
-    const [image, setImage] = useState(null);
+    const [image, setImage] = useState(null); // file to upload
+    const [previewImage, setPreviewImage] = useState(null); // local preview
     const [detections, setDetections] = useState([]);
     const [croppedImage, setCroppedImage] = useState(null);
     const [message, setMessage] = useState("");
@@ -20,6 +21,10 @@ export default function ImageUpload() {
         setDetections([]);
         setCroppedImage(null);
         setMessage("");
+
+        if (file) {
+            setPreviewImage(URL.createObjectURL(file));
+        }
     };
 
     // Upload image to backend
@@ -44,12 +49,11 @@ export default function ImageUpload() {
 
             if (response.ok) {
                 const data = await response.json();
-                const detection = data.detections?.[0]; // Only one detection returned
+                const detection = data.detections?.[0];
                 if (detection) {
                     setDetections([detection]);
                     setMessage(`Detected: ${detection.class}`);
 
-                    // Set cropped vehicle image
                     if (data.cropped_image) {
                         setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
                     }
@@ -68,25 +72,23 @@ export default function ImageUpload() {
         }
     };
 
-    // Draw the original image with bounding box (optional)
+    // Draw bounding box on original image (optional)
     useEffect(() => {
         if (!image || detections.length === 0) return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         const img = new Image();
-        img.src = URL.createObjectURL(image);
+        img.src = previewImage || URL.createObjectURL(image);
 
         img.onload = () => {
             const aspectRatio = img.width / img.height;
             canvas.width = imgDimensions.height * aspectRatio;
             canvas.height = imgDimensions.height;
 
-            // Draw the original image
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            // Draw bounding box for the detected vehicle
             const { class: label, box } = detections[0];
             if (box) {
                 const { x_min, y_min, x_max, y_max } = box;
@@ -110,7 +112,7 @@ export default function ImageUpload() {
                 ctx.fillText(label, scaledXMin + 4, scaledYMin - 8);
             }
         };
-    }, [image, detections, imgDimensions]);
+    }, [image, detections, imgDimensions, previewImage]);
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
@@ -122,7 +124,19 @@ export default function ImageUpload() {
                 </button>
             </form>
 
-            {/* Display uploaded image with bounding box */}
+            {/* Preview before upload */}
+            {previewImage && !detections.length && (
+                <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <h3>Preview:</h3>
+                    <img
+                        src={previewImage}
+                        alt="Preview"
+                        style={{ height: `${imgDimensions.height}px`, width: "auto", marginTop: "10px", border: "1px solid black" }}
+                    />
+                </div>
+            )}
+
+            {/* Original image with detection */}
             {image && detections.length > 0 && (
                 <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <h3>Original Image with Detection:</h3>
@@ -133,7 +147,7 @@ export default function ImageUpload() {
                 </div>
             )}
 
-            {/* Display cropped vehicle image */}
+            {/* Cropped vehicle */}
             {croppedImage && (
                 <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <h3>Cropped Vehicle:</h3>
@@ -145,7 +159,6 @@ export default function ImageUpload() {
                 </div>
             )}
 
-             {/* Display message  */}
             {message && <p style={{ textAlign: "center", marginTop: "10px" }}>{message}</p>}
         </div>
     );
