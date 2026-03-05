@@ -5,18 +5,19 @@ import { useState, useRef, useEffect } from "react";
 const API = process.env.NEXT_PUBLIC_BACKEND_API;
 
 export default function ImageUpload() {
-    const [image, setImage] = useState(null); // file to upload
-    const [previewImage, setPreviewImage] = useState(null); // local preview
+    const [image, setImage] = useState(null);
+    const [previewImage, setPreviewImage] = useState(null);
     const [detections, setDetections] = useState([]);
     const [croppedImage, setCroppedImage] = useState(null);
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
     const canvasRef = useRef(null);
-    const [imgDimensions, setImgDimensions] = useState({ height: 300 });
+    const [imgDimensions] = useState({ height: 300 });
 
     // Handle file selection
     const handleImageChange = (e) => {
         const file = e.target.files[0];
+
         setImage(file);
         setDetections([]);
         setCroppedImage(null);
@@ -27,9 +28,10 @@ export default function ImageUpload() {
         }
     };
 
-    // Upload image to backend
+    // Upload image to backend (detect ALL vehicles)
     const handleUpload = async (e) => {
         e.preventDefault();
+
         if (!image) {
             setMessage("Please select an image first.");
             return;
@@ -49,37 +51,93 @@ export default function ImageUpload() {
 
             if (response.ok) {
                 const data = await response.json();
-                const detection = data.detections?.[0];
-                if (detection) {
-                    setDetections([detection]);
-                    setMessage(`Detected: ${detection.class}`);
 
-                    if (data.cropped_image) {
-                        setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
-                    }
+                if (data.detections?.length > 0) {
+                    setDetections(data.detections);
+                    setMessage("Click a vehicle to analyze it.");
                 } else {
                     setDetections([]);
-                    setCroppedImage(null);
                     setMessage("No vehicles detected.");
                 }
             } else {
                 setMessage(`Error: ${response.statusText}`);
             }
         } catch (error) {
-            setMessage(`Error uploading image: ${error.message}`);
+            setMessage(`Upload error: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
-    // Draw bounding box on original image (optional)
+    // Send selected vehicle to backend
+    const sendSelectedCar = async (box) => {
+        const formData = new FormData();
+        formData.append("file", image);
+        formData.append("box", JSON.stringify(box));
+
+        try {
+            const response = await fetch(`${API}/analyze_selected_car`, {
+                method: "POST",
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (data.cropped_image) {
+                setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
+            }
+        } catch (error) {
+            setMessage("Error analyzing selected vehicle.");
+        }
+    };
+
+    // Handle clicking on canvas
+    const handleCanvasClick = (event) => {
+        if (!detections.length) return;
+
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+
+        const clickX = event.clientX - rect.left;
+        const clickY = event.clientY - rect.top;
+
+        const img = new Image();
+        img.src = previewImage;
+
+        img.onload = () => {
+            const aspectRatio = img.width / img.height;
+            const canvasWidth = imgDimensions.height * aspectRatio;
+            const canvasHeight = imgDimensions.height;
+
+            const selected = detections.find(({ box }) => {
+                const scaledXMin = (box.x_min * canvasWidth) / img.width;
+                const scaledYMin = (box.y_min * canvasHeight) / img.height;
+                const scaledXMax = (box.x_max * canvasWidth) / img.width;
+                const scaledYMax = (box.y_max * canvasHeight) / img.height;
+
+                return (
+                    clickX >= scaledXMin &&
+                    clickX <= scaledXMax &&
+                    clickY >= scaledYMin &&
+                    clickY <= scaledYMax
+                );
+            });
+
+            if (selected) {
+                setMessage(`Selected: ${selected.class}`);
+                sendSelectedCar(selected.box);
+            }
+        };
+    };
+
+    // Draw image + ALL bounding boxes
     useEffect(() => {
-        if (!image || detections.length === 0) return;
+        if (!previewImage || detections.length === 0) return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         const img = new Image();
-        img.src = previewImage || URL.createObjectURL(image);
+        img.src = previewImage;
 
         img.onload = () => {
             const aspectRatio = img.width / img.height;
@@ -89,17 +147,14 @@ export default function ImageUpload() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            const { class: label, box } = detections[0];
-            if (box) {
-                const { x_min, y_min, x_max, y_max } = box;
-
-                const scaledXMin = (x_min * canvas.width) / img.width;
-                const scaledYMin = (y_min * canvas.height) / img.height;
-                const scaledXMax = (x_max * canvas.width) / img.width;
-                const scaledYMax = (y_max * canvas.height) / img.height;
+            detections.forEach(({ class: label, box }) => {
+                const scaledXMin = (box.x_min * canvas.width) / img.width;
+                const scaledYMin = (box.y_min * canvas.height) / img.height;
+                const scaledXMax = (box.x_max * canvas.width) / img.width;
+                const scaledYMax = (box.y_max * canvas.height) / img.height;
 
                 ctx.strokeStyle = "lime";
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 3;
                 ctx.strokeRect(
                     scaledXMin,
                     scaledYMin,
@@ -109,57 +164,62 @@ export default function ImageUpload() {
 
                 ctx.fillStyle = "lime";
                 ctx.font = "16px Arial";
-                ctx.fillText(label, scaledXMin + 4, scaledYMin - 8);
-            }
+                ctx.fillText(label, scaledXMin + 4, scaledYMin - 6);
+            });
         };
-    }, [image, detections, imgDimensions, previewImage]);
+    }, [previewImage, detections, imgDimensions]);
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
             <h1>Car Detection</h1>
+
             <form onSubmit={handleUpload}>
                 <input type="file" accept="image/*" onChange={handleImageChange} required />
                 <button type="submit" disabled={loading}>
-                    {loading ? "Uploading..." : "Upload Image"}
+                    {loading ? "Detect Vehicles..." : "Detect Vehicles"}
                 </button>
             </form>
 
-            {/* Preview before upload */}
-            {previewImage && !detections.length && (
-                <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Preview before detection */}
+            {previewImage && detections.length === 0 && (
+                <div style={{ marginTop: "20px" }}>
                     <h3>Preview:</h3>
                     <img
                         src={previewImage}
                         alt="Preview"
-                        style={{ height: `${imgDimensions.height}px`, width: "auto", marginTop: "10px", border: "1px solid black" }}
+                        style={{ height: `${imgDimensions.height}px`, border: "1px solid black" }}
                     />
                 </div>
             )}
 
-            {/* Original image with detection */}
-            {image && detections.length > 0 && (
-                <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <h3>Original Image with Detection:</h3>
+            {/* Canvas with clickable detections */}
+            {detections.length > 0 && (
+                <div style={{ marginTop: "20px" }}>
+                    <h3>Click a Vehicle:</h3>
                     <canvas
                         ref={canvasRef}
-                        style={{ maxWidth: "100%", border: "1px solid black", marginTop: "10px" }}
+                        onClick={handleCanvasClick}
+                        style={{
+                            border: "1px solid black",
+                            cursor: "pointer"
+                        }}
                     />
                 </div>
             )}
 
-            {/* Cropped vehicle */}
+            {/* Cropped Selected Vehicle */}
             {croppedImage && (
-                <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <h3>Cropped Vehicle:</h3>
+                <div style={{ marginTop: "20px" }}>
+                    <h3>Selected Vehicle:</h3>
                     <img
                         src={croppedImage}
                         alt="Cropped Vehicle"
-                        style={{ height: `${imgDimensions.height}px`, width: "auto", marginTop: "10px", border: "1px solid black" }}
+                        style={{ height: `${imgDimensions.height}px`, border: "1px solid black" }}
                     />
                 </div>
             )}
 
-            {message && <p style={{ textAlign: "center", marginTop: "10px" }}>{message}</p>}
+            {message && <p style={{ marginTop: "10px" }}>{message}</p>}
         </div>
     );
 }
