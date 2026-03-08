@@ -11,8 +11,10 @@ export default function ImageUpload() {
     const [croppedImage, setCroppedImage] = useState(null);
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
+    const [analyzing, setAnalyzing] = useState(false); 
     const canvasRef = useRef(null);
-    const [imgDimensions] = useState({ height: 300 });
+
+    const maxCanvasWidth = 600;
 
     // Handle file selection
     const handleImageChange = (e) => {
@@ -41,7 +43,7 @@ export default function ImageUpload() {
         formData.append("file", image);
 
         setLoading(true);
-        setMessage("");
+        setMessage("Detecting vehicles...");
 
         try {
             const response = await fetch(`${API}/detect_car`, {
@@ -75,6 +77,9 @@ export default function ImageUpload() {
         formData.append("file", image);
         formData.append("box", JSON.stringify(box));
 
+        setAnalyzing(true);
+        setMessage("Analyzing selected vehicle...");
+
         try {
             const response = await fetch(`${API}/analyze_selected_car`, {
                 method: "POST",
@@ -85,15 +90,18 @@ export default function ImageUpload() {
 
             if (data.cropped_image) {
                 setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
+                setMessage("Vehicle analyzed.");
             }
         } catch (error) {
             setMessage("Error analyzing selected vehicle.");
+        } finally {
+            setAnalyzing(false);
         }
     };
 
     // Handle clicking on canvas
     const handleCanvasClick = (event) => {
-        if (!detections.length) return;
+        if (!detections.length || analyzing) return;
 
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
@@ -105,15 +113,15 @@ export default function ImageUpload() {
         img.src = previewImage;
 
         img.onload = () => {
-            const aspectRatio = img.width / img.height;
-            const canvasWidth = imgDimensions.height * aspectRatio;
-            const canvasHeight = imgDimensions.height;
+            const scale = Math.min(maxCanvasWidth / img.width, 1);
+            const canvasWidth = img.width * scale;
+            const canvasHeight = img.height * scale;
 
             const selected = detections.find(({ box }) => {
-                const scaledXMin = (box.x_min * canvasWidth) / img.width;
-                const scaledYMin = (box.y_min * canvasHeight) / img.height;
-                const scaledXMax = (box.x_max * canvasWidth) / img.width;
-                const scaledYMax = (box.y_max * canvasHeight) / img.height;
+                const scaledXMin = box.x_min * scale;
+                const scaledYMin = box.y_min * scale;
+                const scaledXMax = box.x_max * scale;
+                const scaledYMax = box.y_max * scale;
 
                 return (
                     clickX >= scaledXMin &&
@@ -140,18 +148,19 @@ export default function ImageUpload() {
         img.src = previewImage;
 
         img.onload = () => {
-            const aspectRatio = img.width / img.height;
-            canvas.width = imgDimensions.height * aspectRatio;
-            canvas.height = imgDimensions.height;
+            const scale = Math.min(maxCanvasWidth / img.width, 1);
+
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
             detections.forEach(({ class: label, box }) => {
-                const scaledXMin = (box.x_min * canvas.width) / img.width;
-                const scaledYMin = (box.y_min * canvas.height) / img.height;
-                const scaledXMax = (box.x_max * canvas.width) / img.width;
-                const scaledYMax = (box.y_max * canvas.height) / img.height;
+                const scaledXMin = box.x_min * scale;
+                const scaledYMin = box.y_min * scale;
+                const scaledXMax = box.x_max * scale;
+                const scaledYMax = box.y_max * scale;
 
                 ctx.strokeStyle = "lime";
                 ctx.lineWidth = 3;
@@ -167,7 +176,7 @@ export default function ImageUpload() {
                 ctx.fillText(label, scaledXMin + 4, scaledYMin - 6);
             });
         };
-    }, [previewImage, detections, imgDimensions]);
+    }, [previewImage, detections]);
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -175,8 +184,8 @@ export default function ImageUpload() {
 
             <form onSubmit={handleUpload}>
                 <input type="file" accept="image/*" onChange={handleImageChange} required />
-                <button type="submit" disabled={loading}>
-                    {loading ? "Detect Vehicles..." : "Detect Vehicles"}
+                <button type="submit" disabled={loading || analyzing}>
+                    {loading ? "Detecting Vehicles..." : "Detect Vehicles"}
                 </button>
             </form>
 
@@ -187,7 +196,7 @@ export default function ImageUpload() {
                     <img
                         src={previewImage}
                         alt="Preview"
-                        style={{ height: `${imgDimensions.height}px`, border: "1px solid black" }}
+                        style={{ maxWidth: "600px", border: "1px solid black" }}
                     />
                 </div>
             )}
@@ -201,7 +210,7 @@ export default function ImageUpload() {
                         onClick={handleCanvasClick}
                         style={{
                             border: "1px solid black",
-                            cursor: "pointer"
+                            cursor: analyzing ? "wait" : "pointer"
                         }}
                     />
                 </div>
@@ -214,7 +223,7 @@ export default function ImageUpload() {
                     <img
                         src={croppedImage}
                         alt="Cropped Vehicle"
-                        style={{ height: `${imgDimensions.height}px`, border: "1px solid black" }}
+                        style={{ maxWidth: "600px", border: "1px solid black" }}
                     />
                 </div>
             )}
