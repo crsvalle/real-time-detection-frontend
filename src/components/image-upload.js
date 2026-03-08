@@ -11,9 +11,9 @@ export default function ImageUpload() {
     const [croppedImage, setCroppedImage] = useState(null);
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
+    const [analyzing, setAnalyzing] = useState(false); 
     const canvasRef = useRef(null);
 
-    // NEW: max canvas width instead of fixed height
     const maxCanvasWidth = 600;
 
     // Handle file selection
@@ -43,7 +43,7 @@ export default function ImageUpload() {
         formData.append("file", image);
 
         setLoading(true);
-        setMessage("");
+        setMessage("Detecting vehicles...");
 
         try {
             const response = await fetch(`${API}/detect_car`, {
@@ -77,6 +77,9 @@ export default function ImageUpload() {
         formData.append("file", image);
         formData.append("box", JSON.stringify(box));
 
+        setAnalyzing(true);
+        setMessage("Analyzing selected vehicle...");
+
         try {
             const response = await fetch(`${API}/analyze_selected_car`, {
                 method: "POST",
@@ -87,15 +90,18 @@ export default function ImageUpload() {
 
             if (data.cropped_image) {
                 setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
+                setMessage("Vehicle analyzed.");
             }
         } catch (error) {
             setMessage("Error analyzing selected vehicle.");
+        } finally {
+            setAnalyzing(false);
         }
     };
 
     // Handle clicking on canvas
     const handleCanvasClick = (event) => {
-        if (!detections.length) return;
+        if (!detections.length || analyzing) return;
 
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
@@ -178,8 +184,8 @@ export default function ImageUpload() {
 
             <form onSubmit={handleUpload}>
                 <input type="file" accept="image/*" onChange={handleImageChange} required />
-                <button type="submit" disabled={loading}>
-                    {loading ? "Detect Vehicles..." : "Detect Vehicles"}
+                <button type="submit" disabled={loading || analyzing}>
+                    {loading ? "Detecting Vehicles..." : "Detect Vehicles"}
                 </button>
             </form>
 
@@ -204,7 +210,7 @@ export default function ImageUpload() {
                         onClick={handleCanvasClick}
                         style={{
                             border: "1px solid black",
-                            cursor: "pointer"
+                            cursor: analyzing ? "wait" : "pointer"
                         }}
                     />
                 </div>
