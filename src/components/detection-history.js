@@ -1,38 +1,38 @@
-"use client";
+export default function DetectionHistory({ history, setHistory }) {
 
-import { useEffect, useState } from "react";
-
-export default function DetectionHistory() {
-  const [history, setHistory] = useState([]);
-
-  useEffect(() => {
-    const storedHistory = JSON.parse(localStorage.getItem("detectionHistory")) || [];
-    setHistory(storedHistory);
-  }, []);
+  const clearHistory = () => {
+    localStorage.removeItem("detectionHistory");
+    setHistory([]);
+  };
 
   if (history.length === 0) {
     return (
       <div style={styles.panel}>
         <h2>Detection History</h2>
-        <p>No scans yet.</p>
+        <p>No previous detections.</p>
       </div>
     );
   }
 
   return (
     <div style={styles.panel}>
-      <h2>Detection History</h2>
+      <div style={styles.header}>
+        <h2>Detection History</h2>
+        <button onClick={clearHistory} style={styles.clearBtn}>
+          Clear History
+        </button>
+      </div>
 
       {history.map((item) => (
         <div key={item.id} style={styles.card}>
-          <img src={item.image} style={styles.image} />
+          <img src={item.image} alt="scan" style={styles.image} />
 
           <div>
-            <p><strong>{item.timestamp}</strong></p>
+            <p style={styles.timestamp}>{item.timestamp}</p>
 
             {item.detections.map((d, i) => (
               <p key={i}>
-                {d.label} — {(d.confidence * 100).toFixed(1)}%
+                {d.class} — {(d.confidence * 100).toFixed(1)}%
               </p>
             ))}
           </div>
@@ -41,6 +41,7 @@ export default function DetectionHistory() {
     </div>
   );
 }
+
 
 const styles = {
   panel: {

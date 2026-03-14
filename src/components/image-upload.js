@@ -13,6 +13,10 @@ export default function ImageUpload() {
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
+    const [history, setHistory] = useState(
+        JSON.parse(localStorage.getItem("detectionHistory")) || []
+    );
+
 
     const canvasRef = useRef(null);
     const maxCanvasWidth = 600;
@@ -32,7 +36,10 @@ export default function ImageUpload() {
         const updatedHistory = [newItem, ...existingHistory].slice(0, 10);
 
         localStorage.setItem("detectionHistory", JSON.stringify(updatedHistory));
+
+        setHistory(updatedHistory);
     };
+
 
     // Handle file selection
     const handleImageChange = (e) => {
@@ -255,8 +262,8 @@ export default function ImageUpload() {
 
             {message && <p style={{ marginTop: "10px" }}>{message}</p>}
 
-            {/* Detection History */}
-            <DetectionHistory />
+            <DetectionHistory history={history} setHistory={setHistory} />
+
         </div>
     );
 }
