@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import DetectionHistory from "@/components/detection-history";
 
 const API = process.env.NEXT_PUBLIC_BACKEND_API;
 
@@ -11,10 +12,27 @@ export default function ImageUpload() {
     const [croppedImage, setCroppedImage] = useState(null);
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
-    const [analyzing, setAnalyzing] = useState(false); 
-    const canvasRef = useRef(null);
+    const [analyzing, setAnalyzing] = useState(false);
 
+    const canvasRef = useRef(null);
     const maxCanvasWidth = 600;
+
+    // Save detections to history
+    const saveToHistory = (imageUrl, detections) => {
+        const existingHistory =
+            JSON.parse(localStorage.getItem("detectionHistory")) || [];
+
+        const newItem = {
+            id: Date.now(),
+            image: imageUrl,
+            detections: detections,
+            timestamp: new Date().toLocaleString(),
+        };
+
+        const updatedHistory = [newItem, ...existingHistory].slice(0, 10);
+
+        localStorage.setItem("detectionHistory", JSON.stringify(updatedHistory));
+    };
 
     // Handle file selection
     const handleImageChange = (e) => {
@@ -30,7 +48,7 @@ export default function ImageUpload() {
         }
     };
 
-    // Upload image to backend (detect ALL vehicles)
+    // Upload image to backend
     const handleUpload = async (e) => {
         e.preventDefault();
 
@@ -56,6 +74,10 @@ export default function ImageUpload() {
 
                 if (data.detections?.length > 0) {
                     setDetections(data.detections);
+
+                    // Save this scan to history
+                    saveToHistory(previewImage, data.detections);
+
                     setMessage("Click a vehicle to analyze it.");
                 } else {
                     setDetections([]);
@@ -71,7 +93,7 @@ export default function ImageUpload() {
         }
     };
 
-    // Send selected vehicle to backend
+    // Send selected vehicle for deeper analysis
     const sendSelectedCar = async (box) => {
         const formData = new FormData();
         formData.append("file", image);
@@ -99,7 +121,7 @@ export default function ImageUpload() {
         }
     };
 
-    // Handle clicking on canvas
+    // Handle clicking vehicles on canvas
     const handleCanvasClick = (event) => {
         if (!detections.length || analyzing) return;
 
@@ -114,8 +136,6 @@ export default function ImageUpload() {
 
         img.onload = () => {
             const scale = Math.min(maxCanvasWidth / img.width, 1);
-            const canvasWidth = img.width * scale;
-            const canvasHeight = img.height * scale;
 
             const selected = detections.find(({ box }) => {
                 const scaledXMin = box.x_min * scale;
@@ -138,7 +158,7 @@ export default function ImageUpload() {
         };
     };
 
-    // Draw image + ALL bounding boxes
+    // Draw image + bounding boxes
     useEffect(() => {
         if (!previewImage || detections.length === 0) return;
 
@@ -183,7 +203,12 @@ export default function ImageUpload() {
             <h1>Car Detection</h1>
 
             <form onSubmit={handleUpload}>
-                <input type="file" accept="image/*" onChange={handleImageChange} required />
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    required
+                />
                 <button type="submit" disabled={loading || analyzing}>
                     {loading ? "Detecting Vehicles..." : "Detect Vehicles"}
                 </button>
@@ -201,7 +226,7 @@ export default function ImageUpload() {
                 </div>
             )}
 
-            {/* Canvas with clickable detections */}
+            {/* Canvas with detections */}
             {detections.length > 0 && (
                 <div style={{ marginTop: "20px" }}>
                     <h3>Click a Vehicle:</h3>
@@ -210,13 +235,13 @@ export default function ImageUpload() {
                         onClick={handleCanvasClick}
                         style={{
                             border: "1px solid black",
-                            cursor: analyzing ? "wait" : "pointer"
+                            cursor: analyzing ? "wait" : "pointer",
                         }}
                     />
                 </div>
             )}
 
-            {/* Cropped Selected Vehicle */}
+            {/* Cropped selected vehicle */}
             {croppedImage && (
                 <div style={{ marginTop: "20px" }}>
                     <h3>Selected Vehicle:</h3>
@@ -229,6 +254,9 @@ export default function ImageUpload() {
             )}
 
             {message && <p style={{ marginTop: "10px" }}>{message}</p>}
+
+            {/* Detection History */}
+            <DetectionHistory />
         </div>
     );
 }
