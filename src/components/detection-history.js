@@ -1,5 +1,4 @@
 export default function DetectionHistory({ history, setHistory }) {
-
   const clearHistory = () => {
     localStorage.removeItem("detectionHistory");
     setHistory([]);
@@ -7,28 +6,31 @@ export default function DetectionHistory({ history, setHistory }) {
 
   if (history.length === 0) {
     return (
-      <div style={styles.panel}>
-        <h2>Detection History</h2>
+      <div className="mt-10 p-5 border rounded-lg">
+        <h2 className="text-xl font-semibold">Detection History</h2>
         <p>No previous detections.</p>
       </div>
     );
   }
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.header}>
-        <h2>Detection History</h2>
-        <button onClick={clearHistory} style={styles.clearBtn}>
+    <div className="mt-10 p-5 border rounded-lg">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Detection History</h2>
+        <button
+          onClick={clearHistory}
+          className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+        >
           Clear History
         </button>
       </div>
 
       {history.map((item) => (
-        <div key={item.id} style={styles.card}>
-          <img src={item.image} alt="scan" style={styles.image} />
+        <div key={item.id} className="flex gap-5 mb-5">
+          <img src={item.image} alt="scan" className="w-32 rounded-md" />
 
           <div>
-            <p style={styles.timestamp}>{item.timestamp}</p>
+            <p className="text-sm text-gray-500">{item.timestamp}</p>
 
             {item.detections.map((d, i) => (
               <p key={i}>
@@ -41,22 +43,3 @@ export default function DetectionHistory({ history, setHistory }) {
     </div>
   );
 }
-
-
-const styles = {
-  panel: {
-    marginTop: "40px",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-  },
-  card: {
-    display: "flex",
-    gap: "20px",
-    marginBottom: "20px",
-  },
-  image: {
-    width: "120px",
-    borderRadius: "6px",
-  },
-};
