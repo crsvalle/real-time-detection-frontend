@@ -2,7 +2,8 @@ import ImageUpload from "@/components/image-upload";
 
 const Home = () => {
   return (
-    <ImageUpload />
+    <div></div>
+    // <ImageUpload />
   );
 };
 
