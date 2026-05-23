@@ -1,163 +1,161 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 const API = process.env.NEXT_PUBLIC_BACKEND_API;
 
 export default function useDetection() {
-    const [image, setImage] = useState(null);
-    const [previewImage, setPreviewImage] = useState(null);
-    const [detections, setDetections] = useState([]);
-    const [croppedImage, setCroppedImage] = useState(null);
-    const [message, setMessage] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [analyzing, setAnalyzing] = useState(false);
-    const [history, setHistory] = useState(
-        typeof window !== "undefined"
-            ? JSON.parse(localStorage.getItem("detectionHistory")) || []
-            : []
-    );
+  const [file, setFile] = useState(null);
+  const [imgUrl, setImgUrl] = useState(null);
+  const [detections, setDetections] = useState([]);
+  const [croppedImage, setCroppedImage] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [history, setHistory] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(localStorage.getItem("detectionHistory")) || [];
+    } catch {
+      return [];
+    }
+  });
 
-    const maxCanvasWidth = 600;
+  // ── Save to history ──────────────────────────────────────────────────────
 
-    const saveToHistory = (imageUrl, detections) => {
-        const existing =
-            JSON.parse(localStorage.getItem("detectionHistory")) || [];
+  const saveToHistory = useCallback((imageUrl, dets) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem("detectionHistory")) || [];
+      const newItem = {
+        id: Date.now(),
+        image: imageUrl,
+        detections: dets,
+        timestamp: new Date().toLocaleString(),
+      };
+      const updated = [newItem, ...existing].slice(0, 10);
+      localStorage.setItem("detectionHistory", JSON.stringify(updated));
+      setHistory(updated);
+    } catch {
 
-        const newItem = {
-            id: Date.now(),
-            image: imageUrl,
-            detections,
-            timestamp: new Date().toLocaleString(),
-        };
+    }
+  }, []);
 
-        const updated = [newItem, ...existing].slice(0, 10);
 
-        localStorage.setItem("detectionHistory", JSON.stringify(updated));
-        setHistory(updated);
-    };
+  const handleFiles = useCallback((files) => {
+    const f = files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      setMessage("Please select an image file.");
+      return;
+    }
+    if (f.size > 8 * 1024 * 1024) {
+      setMessage("Image must be under 8 MB.");
+      return;
+    }
+    setMessage("");
+    setDetections([]);
+    setCroppedImage(null);
+    setSelectedId(null);
+    setFile(f);
+    setImgUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
+  }, []);
 
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
+  const handleImageChange = useCallback((e) => {
+    handleFiles(e.target.files);
+  }, [handleFiles]);
 
-        setImage(file);
+
+  const handleUpload = useCallback(async (e) => {
+    e?.preventDefault();
+    if (!file) { setMessage("Please select an image first."); return; }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setLoading(true);
+    setMessage("Detecting vehicles…");
+    setDetections([]);
+    setCroppedImage(null);
+    setSelectedId(null);
+
+    try {
+      const res = await fetch(`${API}/detect_car`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+
+      if (data.detections?.length > 0) {
+        const dets = data.detections.map((d, i) => ({ ...d, id: i }));
+        setDetections(dets);
+        saveToHistory(imgUrl, dets);
+        setMessage("Click a vehicle to analyze it.");
+      } else {
         setDetections([]);
-        setCroppedImage(null);
-        setMessage("");
+        setMessage("No vehicles detected.");
+      }
+    } catch (err) {
+      setMessage(`Detection error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [file, imgUrl, saveToHistory]);
 
-        if (file) {
-            setPreviewImage(URL.createObjectURL(file));
-        }
-    };
+  const sendSelectedCar = useCallback(async (detection) => {
+    if (!file || analyzing) return;
 
-    const handleUpload = async (e) => {
-        e.preventDefault();
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("box", JSON.stringify(detection.box));
 
-        if (!image) {
-            setMessage("Please select an image first.");
-            return;
-        }
+    setSelectedId(detection.id);
+    setAnalyzing(true);
+    setCroppedImage(null);
+    setMessage(`Analyzing ${detection.class}…`);
 
-        const formData = new FormData();
-        formData.append("file", image);
+    try {
+      const res = await fetch(`${API}/analyze_selected_car`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      if (data.cropped_image) {
+        setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
+        setMessage("Vehicle analyzed.");
+      }
+    } catch (err) {
+      setMessage(`Analysis error: ${err.message}`);
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [file, analyzing]);
 
-        setLoading(true);
-        setMessage("Detecting vehicles...");
 
-        try {
-            const res = await fetch(`${API}/detect_car`, {
-                method: "POST",
-                body: formData,
-            });
+  const reset = useCallback(() => {
+    if (imgUrl) URL.revokeObjectURL(imgUrl);
+    setFile(null);
+    setImgUrl(null);
+    setDetections([]);
+    setCroppedImage(null);
+    setSelectedId(null);
+    setMessage("");
+  }, [imgUrl]);
 
-            const data = await res.json();
-
-            if (data.detections?.length > 0) {
-                setDetections(data.detections);
-                saveToHistory(previewImage, data.detections);
-                setMessage("Click a vehicle to analyze it.");
-            } else {
-                setDetections([]);
-                setMessage("No vehicles detected.");
-            }
-        } catch (err) {
-            setMessage("Upload error.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const sendSelectedCar = async (box) => {
-        const formData = new FormData();
-        formData.append("file", image);
-        formData.append("box", JSON.stringify(box));
-
-        setAnalyzing(true);
-        setMessage("Analyzing selected vehicle...");
-
-        try {
-            const res = await fetch(`${API}/analyze_selected_car`, {
-                method: "POST",
-                body: formData,
-            });
-
-            const data = await res.json();
-
-            if (data.cropped_image) {
-                setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
-                setMessage("Vehicle analyzed.");
-            }
-        } catch {
-            setMessage("Error analyzing selected vehicle.");
-        } finally {
-            setAnalyzing(false);
-        }
-    };
-
-    const handleCanvasClick = (event) => {
-        if (!detections.length || analyzing) return;
-
-        const canvas = event.target;
-        const rect = canvas.getBoundingClientRect();
-
-        const clickX = event.clientX - rect.left;
-        const clickY = event.clientY - rect.top;
-
-        const img = new Image();
-        img.src = previewImage;
-
-        img.onload = () => {
-            const scale = Math.min(maxCanvasWidth / img.width, 1);
-
-            const selected = detections.find(({ box }) => {
-                const x1 = box.x_min * scale;
-                const y1 = box.y_min * scale;
-                const x2 = box.x_max * scale;
-                const y2 = box.y_max * scale;
-
-                return clickX >= x1 && clickX <= x2 && clickY >= y1 && clickY <= y2;
-            });
-
-            if (selected) {
-                setMessage(`Selected: ${selected.class}`);
-                sendSelectedCar(selected.box);
-            }
-        };
-    };
-
-    return {
-        image,
-        previewImage,
-        detections,
-        croppedImage,
-        message,
-        loading,
-        analyzing,
-        history,
-
-        handleImageChange,
-        handleUpload,
-        handleCanvasClick,
-        setHistory,
-    };
+  return {
+    file,
+    imgUrl,
+    detections,
+    croppedImage,
+    selectedId,
+    message,
+    loading,
+    analyzing,
+    history,
+    setHistory,
+    handleFiles,
+    handleImageChange,
+    handleUpload,
+    sendSelectedCar,
+    reset,
+  };
 }
