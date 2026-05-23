@@ -1,271 +1,171 @@
-
-//DO NOT USE RIGHT NOW
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import useDetection from "@/hooks/use-detection";
+import UploadForm from "@/components/upload-form";
+import ImagePreview from "@/components/image-preview";
+import DetectionCanvas from "@/components/detection-canvas";
+import DetectionResults from "@/components/detection-results";
+import CroppedResult from "@/components/cropped-result";
 import DetectionHistory from "@/components/detection-history";
 
-const API = process.env.NEXT_PUBLIC_BACKEND_API;
-
 export default function ImageUpload() {
-    const [image, setImage] = useState(null);
-    const [previewImage, setPreviewImage] = useState(null);
-    const [detections, setDetections] = useState([]);
-    const [croppedImage, setCroppedImage] = useState(null);
-    const [message, setMessage] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [analyzing, setAnalyzing] = useState(false);
-    const [history, setHistory] = useState(
-        JSON.parse(localStorage.getItem("detectionHistory")) || []
-    );
+  const {
+    file,
+    imgUrl,
+    detections,
+    croppedImage,
+    selectedId,
+    message,
+    loading,
+    analyzing,
+    history,
+    setHistory,
+    handleFiles,
+    handleImageChange,
+    handleUpload,
+    sendSelectedCar,
+    reset,
+  } = useDetection();
 
+  const selected = detections.find((d) => d.id === selectedId) ?? null;
 
-    const canvasRef = useRef(null);
-    const maxCanvasWidth = 600;
+  return (
+    <>
+      <style>{CSS}</style>
+      <main className="iu-main">
 
-    // Save detections to history
-    const saveToHistory = (imageUrl, detections) => {
-        const existingHistory =
-            JSON.parse(localStorage.getItem("detectionHistory")) || [];
+        {/* ── Drop zone or workspace ── */}
+        {!imgUrl ? (
+          <UploadForm
+            handleFiles={handleFiles}
+            handleImageChange={handleImageChange}
+            handleUpload={handleUpload}
+            onReset={reset}
+            loading={loading}
+            analyzing={analyzing}
+            hasImage={false}
+            hasDetections={false}
+          />
+        ) : (
+          <div className="iu-workspace">
 
-        const newItem = {
-            id: Date.now(),
-            image: imageUrl,
-            detections: detections,
-            timestamp: new Date().toLocaleString(),
-        };
+            {/* Left column: image + actions */}
+            <div className="iu-left">
+              {/* Image preview (before detection) */}
+              <ImagePreview imgUrl={imgUrl} detections={detections} />
 
-        const updatedHistory = [newItem, ...existingHistory].slice(0, 10);
+              {/* Image with bounding box overlays (after detection) */}
+              <DetectionCanvas
+                imgUrl={imgUrl}
+                detections={detections}
+                selectedId={selectedId}
+                analyzing={analyzing}
+                onSelectVehicle={sendSelectedCar}
+              />
 
-        localStorage.setItem("detectionHistory", JSON.stringify(updatedHistory));
+              {/* Action buttons */}
+              <UploadForm
+                handleFiles={handleFiles}
+                handleImageChange={handleImageChange}
+                handleUpload={handleUpload}
+                onReset={reset}
+                loading={loading}
+                analyzing={analyzing}
+                hasImage={true}
+                hasDetections={detections.length > 0}
+              />
 
-        setHistory(updatedHistory);
-    };
+              {/* Status message */}
+              {message && (
+                <p className={`iu-message ${message.toLowerCase().includes("error") ? "iu-message--error" : ""}`}>
+                  {message}
+                </p>
+              )}
+            </div>
 
+            {/* Right column: results + cropped */}
+            <aside className="iu-right">
+              <DetectionResults
+                detections={detections}
+                selectedId={selectedId}
+                analyzing={analyzing}
+                onSelectVehicle={sendSelectedCar}
+              />
+              <CroppedResult
+                croppedImage={croppedImage}
+                selectedDetection={selected}
+              />
+            </aside>
+          </div>
+        )}
 
-    // Handle file selection
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
-
-        setImage(file);
-        setDetections([]);
-        setCroppedImage(null);
-        setMessage("");
-
-        if (file) {
-            setPreviewImage(URL.createObjectURL(file));
-        }
-    };
-
-    // Upload image to backend
-    const handleUpload = async (e) => {
-        e.preventDefault();
-
-        if (!image) {
-            setMessage("Please select an image first.");
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append("file", image);
-
-        setLoading(true);
-        setMessage("Detecting vehicles...");
-
-        try {
-            const response = await fetch(`${API}/detect_car`, {
-                method: "POST",
-                body: formData,
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-
-                if (data.detections?.length > 0) {
-                    setDetections(data.detections);
-
-                    // Save this scan to history
-                    saveToHistory(previewImage, data.detections);
-
-                    setMessage("Click a vehicle to analyze it.");
-                } else {
-                    setDetections([]);
-                    setMessage("No vehicles detected.");
-                }
-            } else {
-                setMessage(`Error: ${response.statusText}`);
-            }
-        } catch (error) {
-            setMessage(`Upload error: ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Send selected vehicle for deeper analysis
-    const sendSelectedCar = async (box) => {
-        const formData = new FormData();
-        formData.append("file", image);
-        formData.append("box", JSON.stringify(box));
-
-        setAnalyzing(true);
-        setMessage("Analyzing selected vehicle...");
-
-        try {
-            const response = await fetch(`${API}/analyze_selected_car`, {
-                method: "POST",
-                body: formData,
-            });
-
-            const data = await response.json();
-
-            if (data.cropped_image) {
-                setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
-                setMessage("Vehicle analyzed.");
-            }
-        } catch (error) {
-            setMessage("Error analyzing selected vehicle.");
-        } finally {
-            setAnalyzing(false);
-        }
-    };
-
-    // Handle clicking vehicles on canvas
-    const handleCanvasClick = (event) => {
-        if (!detections.length || analyzing) return;
-
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-
-        const clickX = event.clientX - rect.left;
-        const clickY = event.clientY - rect.top;
-
-        const img = new Image();
-        img.src = previewImage;
-
-        img.onload = () => {
-            const scale = Math.min(maxCanvasWidth / img.width, 1);
-
-            const selected = detections.find(({ box }) => {
-                const scaledXMin = box.x_min * scale;
-                const scaledYMin = box.y_min * scale;
-                const scaledXMax = box.x_max * scale;
-                const scaledYMax = box.y_max * scale;
-
-                return (
-                    clickX >= scaledXMin &&
-                    clickX <= scaledXMax &&
-                    clickY >= scaledYMin &&
-                    clickY <= scaledYMax
-                );
-            });
-
-            if (selected) {
-                setMessage(`Selected: ${selected.class}`);
-                sendSelectedCar(selected.box);
-            }
-        };
-    };
-
-    // Draw image + bounding boxes
-    useEffect(() => {
-        if (!previewImage || detections.length === 0) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        const img = new Image();
-        img.src = previewImage;
-
-        img.onload = () => {
-            const scale = Math.min(maxCanvasWidth / img.width, 1);
-
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            detections.forEach(({ class: label, box }) => {
-                const scaledXMin = box.x_min * scale;
-                const scaledYMin = box.y_min * scale;
-                const scaledXMax = box.x_max * scale;
-                const scaledYMax = box.y_max * scale;
-
-                ctx.strokeStyle = "lime";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(
-                    scaledXMin,
-                    scaledYMin,
-                    scaledXMax - scaledXMin,
-                    scaledYMax - scaledYMin
-                );
-
-                ctx.fillStyle = "lime";
-                ctx.font = "16px Arial";
-                ctx.fillText(label, scaledXMin + 4, scaledYMin - 6);
-            });
-        };
-    }, [previewImage, detections]);
-
-    return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <h1>Car Detection</h1>
-
-            <form onSubmit={handleUpload}>
-                <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    required
-                />
-                <button type="submit" disabled={loading || analyzing}>
-                    {loading ? "Detecting Vehicles..." : "Detect Vehicles"}
-                </button>
-            </form>
-
-            {/* Preview before detection */}
-            {previewImage && detections.length === 0 && (
-                <div style={{ marginTop: "20px" }}>
-                    <h3>Preview:</h3>
-                    <img
-                        src={previewImage}
-                        alt="Preview"
-                        style={{ maxWidth: "600px", border: "1px solid black" }}
-                    />
-                </div>
-            )}
-
-            {/* Canvas with detections */}
-            {detections.length > 0 && (
-                <div style={{ marginTop: "20px" }}>
-                    <h3>Click a Vehicle:</h3>
-                    <canvas
-                        ref={canvasRef}
-                        onClick={handleCanvasClick}
-                        style={{
-                            border: "1px solid black",
-                            cursor: analyzing ? "wait" : "pointer",
-                        }}
-                    />
-                </div>
-            )}
-
-            {/* Cropped selected vehicle */}
-            {croppedImage && (
-                <div style={{ marginTop: "20px" }}>
-                    <h3>Selected Vehicle:</h3>
-                    <img
-                        src={croppedImage}
-                        alt="Cropped Vehicle"
-                        style={{ maxWidth: "600px", border: "1px solid black" }}
-                    />
-                </div>
-            )}
-
-            {message && <p style={{ marginTop: "10px" }}>{message}</p>}
-
-            <DetectionHistory history={history} setHistory={setHistory} />
-
-        </div>
-    );
+        {/* Detection history (always visible below) */}
+        <DetectionHistory history={history} setHistory={setHistory} />
+      </main>
+    </>
+  );
 }
+
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Geist+Mono:wght@400;500&display=swap');
+
+  :root {
+    --ci-bg: #0c0c0e;
+    --ci-surface: #111114;
+    --ci-border: rgba(255,255,255,0.07);
+    --ci-text: #e8e8ec;
+    --ci-muted: rgba(232,232,236,0.38);
+    --ci-primary: #e8ff47;
+    --ci-primary-dim: rgba(232,255,71,0.12);
+    --conf-high: #4fffb0;
+    --conf-mid: #ffd166;
+    --conf-low: #ff6b6b;
+  }
+
+  .iu-main {
+    min-height: calc(100vh - 64px);
+    background: var(--ci-bg);
+    color: var(--ci-text);
+    font-family: 'Syne', sans-serif;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .iu-workspace {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 860px) {
+    .iu-workspace {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .iu-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .iu-right {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .iu-message {
+    font-family: 'Geist Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--ci-muted);
+    letter-spacing: 0.04em;
+    padding: 0.4rem 0;
+  }
+
+  .iu-message--error {
+    color: var(--conf-low);
+  }
+`;
