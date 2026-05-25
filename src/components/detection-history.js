@@ -4,7 +4,7 @@ import { useState } from "react";
 
 const CONF_COLOR = (c) => c >= 0.85 ? "#4fffb0" : c >= 0.6 ? "#ffd166" : "#ff6b6b";
 const CLASS_ICON = { car: "🚗", truck: "🚚", bus: "🚌", motorcycle: "🏍️" };
-
+    
 export default function DetectionHistory({ history, setHistory }) {
   const [expandedId, setExpandedId] = useState(null);
 
