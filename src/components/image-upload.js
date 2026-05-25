@@ -1,11 +1,11 @@
 "use client";
 
-import useDetection from "@/hooks/use-detection";
-import UploadForm from "@/components/upload-form";
-import ImagePreview from "@/components/image-preview";
-import DetectionCanvas from "@/components/detection-canvas";
+import useDetection from "@/app/detect/hooks/use-detection";
+import UploadForm from "@/app/detect/components/upload-form";
+import ImagePreview from "@/app/detect/components/image-preview";
+import DetectionCanvas from "@/app/detect/components/detection-canvas";
 import DetectionResults from "@/components/detection-results";
-import CroppedResult from "@/components/cropped-result";
+import CroppedResult from "@/app/detect/components/cropped-result";
 import DetectionHistory from "@/components/detection-history";
 
 export default function ImageUpload() {
