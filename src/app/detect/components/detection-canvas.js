@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
-const CLASS_ICON = { car: "🚗", };
+const CLASS_ICON = { car: "🚗" };
 
 export default function DetectionCanvas({
   imgUrl,
@@ -15,7 +15,7 @@ export default function DetectionCanvas({
   const imgRef = useRef(null);
   const [imgRect, setImgRect] = useState({ w: 0, h: 0, natW: 1, natH: 1 });
 
-  if (!imgUrl || detections.length === 0) return null;
+  // ✅ ALL hooks declared before any conditional return
 
   const onImgLoad = () => {
     const el = imgRef.current;
@@ -38,6 +38,9 @@ export default function DetectionCanvas({
     y: imgRect.natH ? imgRect.h / imgRect.natH : 1,
   }), [imgRect]);
 
+  // ✅ Early return AFTER all hooks
+  if (!imgUrl || detections.length === 0) return null;
+
   return (
     <>
       <style>{CSS}</style>
@@ -54,8 +57,8 @@ export default function DetectionCanvas({
         {/* CSS overlay bounding boxes */}
         {detections.map((d) => {
           const isSelected = selectedId === d.id;
-          const left  = d.box.x_min * scale.x;
-          const top   = d.box.y_min * scale.y;
+          const left   = d.box.x_min * scale.x;
+          const top    = d.box.y_min * scale.y;
           const width  = (d.box.x_max - d.box.x_min) * scale.x;
           const height = (d.box.y_max - d.box.y_min) * scale.y;
 
@@ -98,14 +101,12 @@ const CSS = `
     border: 1px solid rgba(255,255,255,0.07);
     background: #000;
   }
-
   .dc-img {
     display: block;
     width: 100%;
     height: auto;
     user-select: none;
   }
-
   .dc-box {
     position: absolute;
     border: 2px solid rgba(255,255,255,0.55);
@@ -125,7 +126,6 @@ const CSS = `
     box-shadow: 0 0 0 3px rgba(232,255,71,0.18);
   }
   .dc-box:disabled { cursor: wait; }
-
   .dc-label {
     position: absolute;
     top: -26px;
@@ -147,7 +147,6 @@ const CSS = `
     color: #0c0c0e;
     font-weight: 700;
   }
-
   .dc-overlay {
     position: absolute;
     inset: 0;
@@ -156,7 +155,6 @@ const CSS = `
     background: rgba(12,12,14,0.6);
     backdrop-filter: blur(4px);
   }
-
   .dc-overlay-pill {
     display: flex;
     align-items: center;
@@ -170,7 +168,6 @@ const CSS = `
     color: #e8e8ec;
     letter-spacing: 0.04em;
   }
-
   .dc-spin { animation: dc-spin 0.8s linear infinite; }
   @keyframes dc-spin { to { transform: rotate(360deg); } }
 `;
