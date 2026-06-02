@@ -9,6 +9,7 @@ export default function useDetection() {
   const [imgUrl, setImgUrl] = useState(null);
   const [detections, setDetections] = useState([]);
   const [croppedImage, setCroppedImage] = useState(null);
+  const [vehicleInfo, setVehicleInfo] = useState(null);   
   const [selectedId, setSelectedId] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,7 +23,7 @@ export default function useDetection() {
     }
   });
 
-  // ── Save to history ──────────────────────────────────────────────────────
+  // ── Save to history 
 
   const saveToHistory = useCallback((imageUrl, dets) => {
     try {
@@ -36,11 +37,10 @@ export default function useDetection() {
       const updated = [newItem, ...existing].slice(0, 10);
       localStorage.setItem("detectionHistory", JSON.stringify(updated));
       setHistory(updated);
-    } catch {
-
-    }
+    } catch {}
   }, []);
 
+  // ── File handling ────────────────────────────────────────────────────────
 
   const handleFiles = useCallback((files) => {
     const f = files?.[0];
@@ -56,6 +56,7 @@ export default function useDetection() {
     setMessage("");
     setDetections([]);
     setCroppedImage(null);
+    setVehicleInfo(null);
     setSelectedId(null);
     setFile(f);
     setImgUrl((prev) => {
@@ -69,6 +70,7 @@ export default function useDetection() {
   }, [handleFiles]);
 
 
+
   const handleUpload = useCallback(async (e) => {
     e?.preventDefault();
     if (!file) { setMessage("Please select an image first."); return; }
@@ -80,6 +82,7 @@ export default function useDetection() {
     setMessage("Detecting vehicles…");
     setDetections([]);
     setCroppedImage(null);
+    setVehicleInfo(null);
     setSelectedId(null);
 
     try {
@@ -91,7 +94,7 @@ export default function useDetection() {
         const dets = data.detections.map((d, i) => ({ ...d, id: i }));
         setDetections(dets);
         saveToHistory(imgUrl, dets);
-        setMessage("Click a vehicle to analyze it.");
+        setMessage("Click a vehicle to identify it.");
       } else {
         setDetections([]);
         setMessage("No vehicles detected.");
@@ -103,6 +106,8 @@ export default function useDetection() {
     }
   }, [file, imgUrl, saveToHistory]);
 
+  // ── Analyze selected vehicle → get brand/model/year 
+
   const sendSelectedCar = useCallback(async (detection) => {
     if (!file || analyzing) return;
 
@@ -113,18 +118,31 @@ export default function useDetection() {
     setSelectedId(detection.id);
     setAnalyzing(true);
     setCroppedImage(null);
-    setMessage(`Analyzing ${detection.class}…`);
+    setVehicleInfo(null);
+    setMessage(`Identifying ${detection.class}…`);
 
     try {
       const res = await fetch(`${API}/analyze_selected_car`, { method: "POST", body: formData });
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
-      if (data.cropped_image) {
-        setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
-        setMessage("Vehicle analyzed.");
-      }
+
+      if (data.error) throw new Error(data.error);
+
+      // Store the vehicle identification result
+      setVehicleInfo({
+        brand:        data.brand,
+        model:        data.model,
+        year:         data.year,
+        confidence:   data.confidence,
+        notes:        data.notes,
+        score:        data.score,
+        alternatives: data.alternatives ?? [],
+      });
+
+      setMessage(`${data.brand} ${data.model} ${data.year}`);
     } catch (err) {
       setMessage(`Analysis error: ${err.message}`);
+      setVehicleInfo(null);
     } finally {
       setAnalyzing(false);
     }
@@ -137,6 +155,7 @@ export default function useDetection() {
     setImgUrl(null);
     setDetections([]);
     setCroppedImage(null);
+    setVehicleInfo(null);
     setSelectedId(null);
     setMessage("");
   }, [imgUrl]);
@@ -146,6 +165,7 @@ export default function useDetection() {
     imgUrl,
     detections,
     croppedImage,
+    vehicleInfo,       
     selectedId,
     message,
     loading,
