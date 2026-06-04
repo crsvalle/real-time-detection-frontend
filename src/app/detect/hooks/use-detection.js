@@ -9,7 +9,7 @@ export default function useDetection() {
   const [imgUrl, setImgUrl] = useState(null);
   const [detections, setDetections] = useState([]);
   const [croppedImage, setCroppedImage] = useState(null);
-  const [vehicleInfo, setVehicleInfo] = useState(null);   
+  const [vehicleInfo, setVehicleInfo] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,7 +23,7 @@ export default function useDetection() {
     }
   });
 
-  // ── Save to history 
+  // ── Save to history ──────────────────────────────────────────────────────
 
   const saveToHistory = useCallback((imageUrl, dets) => {
     try {
@@ -69,7 +69,7 @@ export default function useDetection() {
     handleFiles(e.target.files);
   }, [handleFiles]);
 
-
+  // ── Detect all vehicles ──────────────────────────────────────────────────
 
   const handleUpload = useCallback(async (e) => {
     e?.preventDefault();
@@ -106,7 +106,7 @@ export default function useDetection() {
     }
   }, [file, imgUrl, saveToHistory]);
 
-  // ── Analyze selected vehicle → get brand/model/year 
+  // ── Analyze selected vehicle ─────────────────────────────────────────────
 
   const sendSelectedCar = useCallback(async (detection) => {
     if (!file || analyzing) return;
@@ -128,7 +128,12 @@ export default function useDetection() {
 
       if (data.error) throw new Error(data.error);
 
-      // Store the vehicle identification result
+      // Cropped image for CroppedResult component
+      if (data.cropped_image) {
+        setCroppedImage(`data:image/jpeg;base64,${data.cropped_image}`);
+      }
+
+      // Brand/model/year for VehicleInfoPanel
       setVehicleInfo({
         brand:        data.brand,
         model:        data.model,
@@ -148,6 +153,7 @@ export default function useDetection() {
     }
   }, [file, analyzing]);
 
+  // ── Reset ────────────────────────────────────────────────────────────────
 
   const reset = useCallback(() => {
     if (imgUrl) URL.revokeObjectURL(imgUrl);
@@ -165,7 +171,7 @@ export default function useDetection() {
     imgUrl,
     detections,
     croppedImage,
-    vehicleInfo,       
+    vehicleInfo,
     selectedId,
     message,
     loading,
