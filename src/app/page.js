@@ -15,7 +15,7 @@ export default function ImageUpload() {
     imgUrl,
     detections,
     croppedImage,
-    vehicleInfo,         
+    vehicleInfo,
     selectedId,
     message,
     loading,
@@ -50,6 +50,7 @@ export default function ImageUpload() {
         ) : (
           <div className="iu-workspace">
 
+            {/* Left column: image + actions */}
             <div className="iu-left">
               <ImagePreview imgUrl={imgUrl} detections={detections} />
 
@@ -59,15 +60,6 @@ export default function ImageUpload() {
                 selectedId={selectedId}
                 analyzing={analyzing}
                 onSelectVehicle={sendSelectedCar}
-              />
-
-              <VehicleInfoPanel
-                result={vehicleInfo}
-                loading={analyzing}
-                error={vehicleInfo === null && !analyzing && selectedId !== null ? message : null}
-                onClose={() => {
-                  // deselect without full reset
-                }}
               />
 
               <UploadForm
@@ -88,7 +80,7 @@ export default function ImageUpload() {
               )}
             </div>
 
-            {/* Right column: results + cropped */}
+            {/* Right column: detections + cropped preview + identification */}
             <aside className="iu-right">
               <DetectionResults
                 detections={detections}
@@ -99,6 +91,12 @@ export default function ImageUpload() {
               <CroppedResult
                 croppedImage={croppedImage}
                 selectedDetection={selected}
+              />
+              <VehicleInfoPanel
+                result={vehicleInfo}
+                loading={analyzing}
+                error={!vehicleInfo && !analyzing && selectedId !== null ? message : null}
+                onClose={() => {}}
               />
             </aside>
           </div>
