@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car } from "lucide-react";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -14,7 +13,6 @@ export default function Navbar() {
         <div className="cv-nav-inner">
           <Link href="/" className="cv-brand">
             <div className="cv-brand-icon">
-              <Car size={16} />
             </div>
             <div>
               <span className="cv-brand-name">CarVision</span>
